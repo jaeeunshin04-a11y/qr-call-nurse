@@ -38,8 +38,8 @@ function getColor(type){
 
 function formatTime(dateStr){
   if(!dateStr) return "";
-  const d = new Date(dateStr);
-  return d.toLocaleTimeString('ko-KR', {hour12:false});
+const kst = new Date(d.getTime() + 9*60*60*1000);
+  return kst.toISOString().substr(11,8);
 }
 
 async function markConfirm(btn,row){
@@ -103,3 +103,4 @@ loadRequests();
 </script>
 </body>
 </html>
+
