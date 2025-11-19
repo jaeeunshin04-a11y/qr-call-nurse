@@ -22,13 +22,16 @@ button:hover{background:#1f36cc;}
 <p>새 요청이 들어오면 자동으로 표시됩니다.</p>
 <table id="requestTable">
 <thead>
-<tr><th>등록번호</th><th>환자명</th><th>병실</th><th>요청항목</th><th>하위항목</th><th>요청시간</th><th>확인시간</th><th>완료시간</th><th>확인</th><th>완료</th></tr>
+<tr>
+<th>등록번호</th><th>환자명</th><th>병실</th><th>요청항목</th><th>하위항목</th>
+<th>요청시간</th><th>확인시간</th><th>완료시간</th><th>확인</th><th>완료</th>
+</tr>
 </thead>
 <tbody></tbody>
 </table>
 
 <script>
-const sheetURL = "https://script.google.com/macros/s/AKfycby0yP5PnSX1IHzAdRCGJlS_qbY1DfKdQQ-aNp8JoQ_563C4iKyaljOUANBWsfVpxp7M/exec";
+const sheetURL = "https://script.google.com/macros/s/AKfycbwE-SkiFCtL5RJVpetstApp165V3gyudMMznmORuDgR-UHtcPrpDXd8Qkj7jK8XYvx2/exec";
 
 function getColor(type){
   if(type.includes("통증")||type.includes("약")||type.includes("화장실")) return "red";
@@ -36,42 +39,54 @@ function getColor(type){
   return "";
 }
 
-// 한국 시간 24시간 HH:MM:SS
 function formatTime(dateStr){
   if(!dateStr) return "";
   const d = new Date(dateStr);
-  const kst = new Date(d.getTime() + 9*60*60*1000); // UTC+9
-  const hh = String(kst.getHours()).padStart(2,'0');
-  const mm = String(kst.getMinutes()).padStart(2,'0');
-  const ss = String(kst.getSeconds()).padStart(2,'0');
-  return `${hh}:${mm}:${ss}`;
+  const kst = new Date(d.getTime() + 9*60*60*1000); // UTC -> KST
+  return kst.toISOString().substr(11,8);
 }
 
-async function markConfirm(btn,row){
+async function markConfirm(btn,row,patientId){
   const tr = btn.closest("tr");
   const now = new Date();
-  tr.querySelector(".confirmTime").innerText = formatTime(now);
+  const formattedTime = formatTime(now);
+
+  tr.querySelector(".confirmTime").innerText = formattedTime;
   btn.disabled = true;
   btn.innerText = "확인됨";
 
+  // 시트에 기록
   await fetch(sheetURL,{
     method:"POST",
     body:JSON.stringify({action:"confirm", row:row})
   });
+
+  // 환자 안내문구
+  await fetch(sheetURL,{
+    method:"POST",
+    body:JSON.stringify({action:"notifyPatient", row:row, patientId: patientId, status:"확인"})
+  });
 }
 
-async function markDone(btn,row){
+async function markDone(btn,row,patientId){
   const tr = btn.closest("tr");
   tr.classList.add("green");
   const timeCell = tr.querySelector(".doneTime");
   const now = new Date();
-  timeCell.innerText = formatTime(now);
-  btn.disabled=true;
-  btn.innerText="완료됨";
+  const formattedTime = formatTime(now);
+  timeCell.innerText = formattedTime;
+  btn.disabled = true;
+  btn.innerText = "완료됨";
 
   await fetch(sheetURL,{
     method:"POST",
     body:JSON.stringify({action:"complete", row:row})
+  });
+
+  // 환자 안내문구
+  await fetch(sheetURL,{
+    method:"POST",
+    body:JSON.stringify({action:"notifyPatient", row:row, patientId: patientId, status:"완료"})
   });
 }
 
@@ -90,16 +105,8 @@ function renderTable(data){
       <td>${formatTime(row.time)}</td>
       <td class="confirmTime">${formatTime(row.confirmTime)}</td>
       <td class="doneTime">${formatTime(row.completeTime)}</td>
-      <td>
-        <button onclick="markConfirm(this,${row.row})" ${row.confirmTime?"disabled":""}>
-          ${row.confirmTime ? "확인됨" : "확인"}
-        </button>
-      </td>
-      <td>
-        <button onclick="markDone(this,${row.row})" ${row.completeTime?"disabled":""}>
-          ${row.completeTime ? "완료됨" : "완료"}
-        </button>
-      </td>
+      <td><button onclick="markConfirm(this,${row.row},'${row.patientId}')" ${row.confirmTime?"disabled":""}>${row.confirmTime?"확인됨":"확인"}</button></td>
+      <td><button onclick="markDone(this,${row.row},'${row.patientId}')" ${row.completeTime?"disabled":""}>${row.completeTime?"완료됨":"완료"}</button></td>
     `;
     tbody.appendChild(tr);
   });
