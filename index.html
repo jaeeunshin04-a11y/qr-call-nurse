@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>간호사 호출 모니터링</title>
 <style>
-body{font-family:'나눔고딕',sans-serif;background:#f0f4ff;text-align:center;padding:30px;}
+body { font-family: '나눔고딕', sans-serif; background:#f0f4ff; text-align:center; padding:30px;}
 h2{color:#2b4eff;margin-bottom:20px;}
-table{margin:0 auto;border-collapse:collapse;width:90%;max-width:1000px;background:white;border-radius:15px;overflow:hidden;box-shadow:0 3px 10px rgba(0,0,0,0.1);}
+table{margin:0 auto;border-collapse:collapse;width:95%;max-width:1200px;background:white;border-radius:15px;overflow:hidden;box-shadow:0 3px 10px rgba(0,0,0,0.1);}
 th,td{border-bottom:1px solid #eee;padding:12px;font-size:16px;}
 th{background:#eaf0ff;color:#333;}
 .red{background:#ffcccc;}
@@ -18,57 +18,94 @@ button:hover{background:#1f36cc;}
 </style>
 </head>
 <body>
-
 <h2>🩺 간호사 호출 모니터링 시스템</h2>
 <p>새 요청이 들어오면 자동으로 표시됩니다.</p>
 <table id="requestTable">
-<thead><tr><th>등록번호</th><th>환자명</th><th>병실</th><th>요청항목</th><th>시간</th><th>확인</th><th>완료</th></tr></thead>
+<thead>
+<tr><th>등록번호</th><th>환자명</th><th>병실</th><th>대분류</th><th>하위항목</th><th>시간</th><th>확인</th><th>완료</th></tr>
+</thead>
 <tbody></tbody>
 </table>
 
 <script>
-const sheetURL="https://script.google.com/macros/s/AKfycbw8Ua4lvWBUijtQWnRx-NWc5g371eaibSFRRFxD4Aqej5rE_rxvDDunYnJuedUi_UoD/exec";
+const sheetURL = "https://script.google.com/macros/s/AKfycbw8Ua4lvWBUijtQWnRx-NWc5g371eaibSFRRFxD4Aqej5rE_rxvDDunYnJuedUi_UoD/exec";
 
+// 요청 종류별 색상
 function getColor(type){
-if(type.includes("통증")||type.includes("약")||type.includes("화장실")) return "red";
-if(type.includes("수액")||type.includes("침구/시트")||type.includes("기타")) return "yellow";
-return "";
+  if(type.includes("통증") || type.includes("약") || type.includes("화장실")) return "red";
+  if(type.includes("수액") || type.includes("침구/시트") || type.includes("기타")) return "yellow";
+  return "white"; // 물 등 일반
 }
 
-async function markCheck(btn,row){
-const tr=btn.closest("tr");
-tr.style.background="#ccf"; btn.disabled=true; btn.innerText="확인됨";
-await fetch(sheetURL,{method:"POST",body:JSON.stringify({action:"check",row:row})});
+// ISO -> HH:MM:SS
+function formatTime(isoString){
+  const date = new Date(isoString);
+  return date.toLocaleTimeString('ko-KR', {hour12:false});
 }
 
+// 하위항목 요약
+function summarizeEtc(etc){
+  if(!etc) return "";
+  const keywords = ["알람","줄","젖","오염","화장실","통증","물","교환","기계"];
+  return keywords.filter(k => etc.includes(k)).join(", ");
+}
+
+// 완료 처리
 async function markDone(btn,row){
-const tr=btn.closest("tr");
-tr.className="green"; btn.disabled=true; btn.innerText="완료됨";
-await fetch(sheetURL,{method:"POST",body:JSON.stringify({action:"complete",row:row})});
-setTimeout(()=>tr.remove(),3000);
+  const tr = btn.closest("tr");
+  tr.className="green";
+  btn.disabled=true;
+  btn.innerText="완료됨";
+
+  await fetch(sheetURL,{
+    method:"POST",
+    body:JSON.stringify({action:"complete", row:row})
+  });
+
+  setTimeout(()=>tr.remove(),3000);
+}
+
+// 확인 처리
+async function markConfirmed(btn,row){
+  btn.disabled=true;
+  btn.innerText="확인됨";
+
+  await fetch(sheetURL,{
+    method:"POST",
+    body:JSON.stringify({action:"confirm", row:row})
+  });
 }
 
 function renderTable(data){
-const tbody=document.querySelector("#requestTable tbody");
-tbody.innerHTML="";
-data.forEach(row=>{
-const tr=document.createElement("tr"); tr.classList.add(getColor(row.requestType));
-tr.innerHTML=`<td>${row.patientId}</td><td>${row.patientName}</td><td>${row.room}</td><td>${row.requestType}</td><td>${row.time}</td>
-<td><button onclick="markCheck(this,${row.row})">확인</button></td>
-<td><button onclick="markDone(this,${row.row})">완료</button></td>`;
-tbody.appendChild(tr);
-});
+  const tbody = document.querySelector("#requestTable tbody");
+  tbody.innerHTML="";
+  data.forEach(row=>{
+    const tr = document.createElement("tr");
+    tr.classList.add(getColor(row.requestType));
+
+    tr.innerHTML=`
+      <td>${row.patientId}</td>
+      <td>${row.patientName}</td>
+      <td>${row.room}</td>
+      <td>${row.requestType}</td>
+      <td>${summarizeEtc(row.etc)}</td>
+      <td>${formatTime(row.time)}</td>
+      <td><button onclick="markConfirmed(this,${row.row})">확인</button></td>
+      <td><button onclick="markDone(this,${row.row})">완료</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
 }
 
 async function loadRequests(){
-const res=await fetch(sheetURL+"?mode=getData");
-const data=await res.json();
-renderTable(data);
+  const res = await fetch(sheetURL+"?mode=getData");
+  const data = await res.json();
+  renderTable(data);
 }
 
+// 2초마다 새로고침
 setInterval(loadRequests,2000);
 loadRequests();
 </script>
-
 </body>
 </html>
