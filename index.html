@@ -20,18 +20,20 @@ button:hover{background:#1f36cc;}
 <body>
 <h2>🩺 간호사 호출 모니터링 시스템</h2>
 <p>새 요청이 들어오면 자동으로 표시됩니다.</p>
+
 <table id="requestTable">
 <thead>
 <tr>
-<th>등록번호</th><th>환자명</th><th>병실</th><th>요청항목</th><th>하위항목</th>
-<th>요청시간</th><th>확인시간</th><th>완료시간</th><th>확인</th><th>완료</th>
+<th>등록번호</th><th>환자명</th><th>병실</th><th>요청항목</th>
+<th>하위항목</th><th>요청시간</th><th>확인시간</th>
+<th>완료시간</th><th>확인</th><th>완료</th>
 </tr>
 </thead>
 <tbody></tbody>
 </table>
 
 <script>
-const sheetURL = "https://script.google.com/macros/s/AKfycbwE-SkiFCtL5RJVpetstApp165V3gyudMMznmORuDgR-UHtcPrpDXd8Qkj7jK8XYvx2/exec";
+const sheetURL = "https://script.google.com/macros/s/AKfycbzqxiFIVZsm0CQ8XaHytPY7u6d3vcW9L19LcBJYOWFLObSD6amYrKCGCnrZgIOTyyU/exec";
 
 function getColor(type){
   if(type.includes("통증")||type.includes("약")||type.includes("화장실")) return "red";
@@ -39,64 +41,52 @@ function getColor(type){
   return "";
 }
 
-function formatTime(dateStr){
-  if(!dateStr) return "";
-  const d = new Date(dateStr);
-  const kst = new Date(d.getTime() + 9*60*60*1000); // UTC -> KST
-  return kst.toISOString().substr(11,8);
+function formatTime(str){
+  if(!str) return "";
+  const d = new Date(str);
+  const k = new Date(d.getTime() + 9*60*60*1000);
+  return k.toISOString().substring(11,19);
 }
 
-async function markConfirm(btn,row,patientId){
+async function markConfirm(btn,row){
+  const nowText = formatTime(new Date());
   const tr = btn.closest("tr");
-  const now = new Date();
-  const formattedTime = formatTime(now);
-
-  tr.querySelector(".confirmTime").innerText = formattedTime;
-  btn.disabled = true;
+  tr.querySelector(".confirmTime").innerText = nowText;
   btn.innerText = "확인됨";
+  btn.disabled = true;
 
-  // 시트에 기록
   await fetch(sheetURL,{
     method:"POST",
     body:JSON.stringify({action:"confirm", row:row})
   });
-
-  // 환자 안내문구
-  await fetch(sheetURL,{
-    method:"POST",
-    body:JSON.stringify({action:"notifyPatient", row:row, patientId: patientId, status:"확인"})
-  });
 }
 
-async function markDone(btn,row,patientId){
+async function markDone(btn,row){
+  const nowText = formatTime(new Date());
   const tr = btn.closest("tr");
+
   tr.classList.add("green");
-  const timeCell = tr.querySelector(".doneTime");
-  const now = new Date();
-  const formattedTime = formatTime(now);
-  timeCell.innerText = formattedTime;
-  btn.disabled = true;
+  tr.querySelector(".doneTime").innerText = nowText;
   btn.innerText = "완료됨";
+  btn.disabled = true;
 
   await fetch(sheetURL,{
     method:"POST",
     body:JSON.stringify({action:"complete", row:row})
   });
-
-  // 환자 안내문구
-  await fetch(sheetURL,{
-    method:"POST",
-    body:JSON.stringify({action:"notifyPatient", row:row, patientId: patientId, status:"완료"})
-  });
 }
 
 function renderTable(data){
   const tbody = document.querySelector("#requestTable tbody");
-  tbody.innerHTML="";
+  tbody.innerHTML = "";
+
   data.forEach(row=>{
     const tr = document.createElement("tr");
     tr.classList.add(getColor(row.requestType));
-    tr.innerHTML=`
+
+    if(row.completeTime) tr.classList.add("green");
+
+    tr.innerHTML = `
       <td>${row.patientId}</td>
       <td>${row.patientName}</td>
       <td>${row.room}</td>
@@ -105,8 +95,24 @@ function renderTable(data){
       <td>${formatTime(row.time)}</td>
       <td class="confirmTime">${formatTime(row.confirmTime)}</td>
       <td class="doneTime">${formatTime(row.completeTime)}</td>
-      <td><button onclick="markConfirm(this,${row.row},'${row.patientId}')" ${row.confirmTime?"disabled":""}>${row.confirmTime?"확인됨":"확인"}</button></td>
-      <td><button onclick="markDone(this,${row.row},'${row.patientId}')" ${row.completeTime?"disabled":""}>${row.completeTime?"완료됨":"완료"}</button></td>
+
+      <td>
+        <button 
+          onclick="markConfirm(this,${row.row})"
+          ${row.confirmTime ? "disabled" : ""}
+        >
+          ${row.confirmTime ? "확인됨" : "확인"}
+        </button>
+      </td>
+
+      <td>
+        <button 
+          onclick="markDone(this,${row.row})"
+          ${row.completeTime ? "disabled" : ""}
+        >
+          ${row.completeTime ? "완료됨" : "완료"}
+        </button>
+      </td>
     `;
     tbody.appendChild(tr);
   });
@@ -118,7 +124,6 @@ async function loadRequests(){
   renderTable(data);
 }
 
-// 2초마다 갱신
 setInterval(loadRequests,2000);
 loadRequests();
 </script>
