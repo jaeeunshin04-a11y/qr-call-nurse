@@ -36,15 +36,21 @@ function getColor(type){
   return "";
 }
 
+// 한국 시간 24시간 HH:MM:SS
 function formatTime(dateStr){
   if(!dateStr) return "";
-const kst = new Date(d.getTime() + 9*60*60*1000);
-  return kst.toISOString().substr(11,8);
+  const d = new Date(dateStr);
+  const kst = new Date(d.getTime() + 9*60*60*1000); // UTC+9
+  const hh = String(kst.getHours()).padStart(2,'0');
+  const mm = String(kst.getMinutes()).padStart(2,'0');
+  const ss = String(kst.getSeconds()).padStart(2,'0');
+  return `${hh}:${mm}:${ss}`;
 }
 
 async function markConfirm(btn,row){
   const tr = btn.closest("tr");
-  tr.querySelector(".confirmTime").innerText = formatTime(new Date());
+  const now = new Date();
+  tr.querySelector(".confirmTime").innerText = formatTime(now);
   btn.disabled = true;
   btn.innerText = "확인됨";
 
@@ -84,8 +90,16 @@ function renderTable(data){
       <td>${formatTime(row.time)}</td>
       <td class="confirmTime">${formatTime(row.confirmTime)}</td>
       <td class="doneTime">${formatTime(row.completeTime)}</td>
-      <td><button onclick="markConfirm(this,${row.row})" ${row.confirmTime?"disabled":""}>확인</button></td>
-      <td><button onclick="markDone(this,${row.row})" ${row.completeTime?"disabled":""}>완료</button></td>
+      <td>
+        <button onclick="markConfirm(this,${row.row})" ${row.confirmTime?"disabled":""}>
+          ${row.confirmTime ? "확인됨" : "확인"}
+        </button>
+      </td>
+      <td>
+        <button onclick="markDone(this,${row.row})" ${row.completeTime?"disabled":""}>
+          ${row.completeTime ? "완료됨" : "완료"}
+        </button>
+      </td>
     `;
     tbody.appendChild(tr);
   });
@@ -103,4 +117,3 @@ loadRequests();
 </script>
 </body>
 </html>
-
