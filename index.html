@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>간호사 모니터링</title>
+<title>간호사 호출 모니터링</title>
 <style>
-body { font-family:'나눔고딕',sans-serif; background:#f0f4ff; text-align:center; padding:30px; }
-h2 { color:#2b4eff; margin-bottom:20px; }
+body { font-family: '나눔고딕', sans-serif; background:#f0f4ff; text-align:center; padding:30px;}
+h2{color:#2b4eff;margin-bottom:20px;}
 table{margin:0 auto;border-collapse:collapse;width:90%;max-width:1000px;background:white;border-radius:15px;overflow:hidden;box-shadow:0 3px 10px rgba(0,0,0,0.1);}
 th,td{border-bottom:1px solid #eee;padding:12px;font-size:16px;}
 th{background:#eaf0ff;color:#333;}
@@ -22,71 +22,82 @@ button:hover{background:#1f36cc;}
 <p>새 요청이 들어오면 자동으로 표시됩니다.</p>
 <table id="requestTable">
 <thead>
-<tr><th>등록번호</th><th>환자명</th><th>병실</th><th>요청항목</th><th>하위항목</th><th>요청시간</th><th>확인</th><th>완료</th></tr>
+<tr><th>등록번호</th><th>환자명</th><th>병실</th><th>요청항목</th><th>하위항목</th><th>요청시간</th><th>확인시간</th><th>완료시간</th><th>확인</th><th>완료</th></tr>
 </thead>
 <tbody></tbody>
 </table>
 
 <script>
-const sheetURL="https://script.google.com/macros/s/AKfycbzQVKCXorHUox-68EiaSwSqqmDvIfgU_FNCfCq37nfxmCkl76Op97upp7rNw4SrZ9do/exec";
+const sheetURL = "https://script.google.com/macros/s/AKfycby0yP5PnSX1IHzAdRCGJlS_qbY1DfKdQQ-aNp8JoQ_563C4iKyaljOUANBWsfVpxp7M/exec";
 
 function getColor(type){
   if(type.includes("통증")||type.includes("약")||type.includes("화장실")) return "red";
-  if(type.includes("수액")||type.includes("침구")) return "yellow";
+  if(type.includes("수액")||type.includes("침구")||type.includes("시트")) return "yellow";
   return "";
 }
 
-function summarizeEtc(type,etc){
-  if(type==="수액") {
-    if(etc.includes("알람")) return "수액 기계 알람";
-    if(etc.includes("꺾")) return "수액 줄 꺾임";
-  }
-  if(type==="침구/시트") return etc.includes("젖")?"침구 젖음":"시트 오염";
-  if(type==="화장실") return etc.includes("도움")?"화장실 이동 도움":"기저귀 교환";
-  return etc;
+function formatTime(dateStr){
+  if(!dateStr) return "";
+  const d = new Date(dateStr);
+  return d.toLocaleTimeString('ko-KR', {hour12:false});
 }
 
-async function updateStatus(row,action,btn){
-  const tr=btn.closest("tr");
-  if(action==="confirm"){
-    btn.innerText="확인됨";
-    await fetch(sheetURL,{method:"POST",body:JSON.stringify({action:"confirm",row:row})});
-  } else if(action==="complete"){
-    btn.innerText="완료됨";
-    tr.classList.add("green");
-    await fetch(sheetURL,{method:"POST",body:JSON.stringify({action:"complete",row:row})});
-    setTimeout(()=>tr.remove(),3000);
-  }
-  loadRequests(); // 새로고침
+async function markConfirm(btn,row){
+  const tr = btn.closest("tr");
+  tr.querySelector(".confirmTime").innerText = formatTime(new Date());
+  btn.disabled = true;
+  btn.innerText = "확인됨";
+
+  await fetch(sheetURL,{
+    method:"POST",
+    body:JSON.stringify({action:"confirm", row:row})
+  });
+}
+
+async function markDone(btn,row){
+  const tr = btn.closest("tr");
+  tr.classList.add("green");
+  const timeCell = tr.querySelector(".doneTime");
+  const now = new Date();
+  timeCell.innerText = formatTime(now);
+  btn.disabled=true;
+  btn.innerText="완료됨";
+
+  await fetch(sheetURL,{
+    method:"POST",
+    body:JSON.stringify({action:"complete", row:row})
+  });
 }
 
 function renderTable(data){
-  const tbody=document.querySelector("#requestTable tbody");
+  const tbody = document.querySelector("#requestTable tbody");
   tbody.innerHTML="";
   data.forEach(row=>{
-    const tr=document.createElement("tr");
+    const tr = document.createElement("tr");
     tr.classList.add(getColor(row.requestType));
-    const summarizedEtc=summarizeEtc(row.requestType,row.etc);
     tr.innerHTML=`
       <td>${row.patientId}</td>
       <td>${row.patientName}</td>
       <td>${row.room}</td>
       <td>${row.requestType}</td>
-      <td>${summarizedEtc}</td>
-      <td>${row.time.split("T").pop().split(".")[0]}</td>
-      <td><button onclick="updateStatus(${row.row},'confirm',this)">${row.confirmTime?"확인됨":"확인"}</button></td>
-      <td><button onclick="updateStatus(${row.row},'complete',this)">${row.completeTime?"완료됨":"완료"}</button></td>
+      <td>${row.etc}</td>
+      <td>${formatTime(row.time)}</td>
+      <td class="confirmTime">${formatTime(row.confirmTime)}</td>
+      <td class="doneTime">${formatTime(row.completeTime)}</td>
+      <td><button onclick="markConfirm(this,${row.row})" ${row.confirmTime?"disabled":""}>확인</button></td>
+      <td><button onclick="markDone(this,${row.row})" ${row.completeTime?"disabled":""}>완료</button></td>
     `;
     tbody.appendChild(tr);
   });
 }
 
 async function loadRequests(){
-  const res=await fetch(sheetURL+"?mode=getData");
-  const data=await res.json();
+  const res = await fetch(sheetURL+"?mode=getData");
+  const data = await res.json();
   renderTable(data);
 }
 
+// 2초마다 갱신
 setInterval(loadRequests,2000);
 loadRequests();
 </script>
