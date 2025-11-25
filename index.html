@@ -33,7 +33,7 @@ button:hover{background:#1f36cc;}
 </table>
 
 <script>
-const sheetURL = "https://script.google.com/macros/s/AKfycbw1b5ucdbPwLSW6JKz8rH5rttNDqdOfF5lSxwUJb5Gz5kMEuVXY9cv4ueKnvR3MYFpb/exec";
+const sheetURL = "YOUR_APPSCRIPT_URL_HERE"; // 앱스크립트 URL
 
 function getColor(type){
   if(type.includes("통증")||type.includes("약")||type.includes("화장실")) return "red";
@@ -44,14 +44,13 @@ function getColor(type){
 function formatTime(str){
   if(!str) return "";
   const d = new Date(str);
-  const k = new Date(d.getTime() + 9*60*60*1000);
-  return k.toISOString().substring(11,19);
+  return d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 }
 
 async function markConfirm(btn,row){
-  const nowText = formatTime(new Date());
+  const now = new Date();
   const tr = btn.closest("tr");
-  tr.querySelector(".confirmTime").innerText = nowText;
+  tr.querySelector(".confirmTime").innerText = formatTime(now);
   btn.innerText = "확인됨";
   btn.disabled = true;
 
@@ -62,29 +61,32 @@ async function markConfirm(btn,row){
 }
 
 async function markDone(btn,row){
-  const nowText = formatTime(new Date());
+  const now = new Date();
   const tr = btn.closest("tr");
-
-  tr.classList.add("green");
-  tr.querySelector(".doneTime").innerText = nowText;
-  btn.innerText = "완료됨";
-  btn.disabled = true;
-
+  
+  // 완료 상태 업데이트
+  tr.querySelector(".doneTime").innerText = formatTime(now);
   await fetch(sheetURL,{
     method:"POST",
     body:JSON.stringify({action:"complete", row:row})
   });
+
+  // 초록색 적용 후 3초 뒤 사라짐
+  tr.classList.add("green");
+  btn.innerText = "완료됨";
+  btn.disabled = true;
+  setTimeout(()=>{ tr.remove(); },3000);
 }
 
 function renderTable(data){
   const tbody = document.querySelector("#requestTable tbody");
-  tbody.innerHTML = "";
 
   data.forEach(row=>{
+    // 상태 빈칸이면 표시, 완료(ㅇ)는 화면에서 사라짐 처리
+    if(row.status === "ㅇ") return;
+
     const tr = document.createElement("tr");
     tr.classList.add(getColor(row.requestType));
-
-    if(row.completeTime) tr.classList.add("green");
 
     tr.innerHTML = `
       <td>${row.patientId}</td>
@@ -95,26 +97,18 @@ function renderTable(data){
       <td>${formatTime(row.time)}</td>
       <td class="confirmTime">${formatTime(row.confirmTime)}</td>
       <td class="doneTime">${formatTime(row.completeTime)}</td>
-
       <td>
-        <button 
-          onclick="markConfirm(this,${row.row})"
-          ${row.confirmTime ? "disabled" : ""}
-        >
+        <button onclick="markConfirm(this,${row.row})" ${row.confirmTime ? "disabled" : ""}>
           ${row.confirmTime ? "확인됨" : "확인"}
         </button>
       </td>
-
       <td>
-        <button 
-          onclick="markDone(this,${row.row})"
-          ${row.completeTime ? "disabled" : ""}
-        >
+        <button onclick="markDone(this,${row.row})" ${row.completeTime ? "disabled" : ""}>
           ${row.completeTime ? "완료됨" : "완료"}
         </button>
       </td>
     `;
-    tbody.appendChild(tr);
+    tbody.prepend(tr); // 새 요청은 위로
   });
 }
 
@@ -124,11 +118,9 @@ async function loadRequests(){
   renderTable(data);
 }
 
+// 2초마다 자동 갱신
 setInterval(loadRequests,2000);
 loadRequests();
 </script>
 </body>
 </html>
-
-
-
