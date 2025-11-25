@@ -13,6 +13,7 @@ th{background:#eaf0ff;color:#333;}
 .red{background:#ffcccc;}
 .yellow{background:#fff4cc;}
 .green{background:#ccffcc;}
+.white{background:#ffffff;}
 button{padding:6px 10px;border:none;border-radius:10px;background:#2b4eff;color:white;cursor:pointer;transition:0.2s;}
 button:hover{background:#1f36cc;}
 </style>
@@ -33,24 +34,26 @@ button:hover{background:#1f36cc;}
 </table>
 
 <script>
-const sheetURL = "https://script.google.com/macros/s/AKfycbw1b5ucdbPwLSW6JKz8rH5rttNDqdOfF5lSxwUJb5Gz5kMEuVXY9cv4ueKnvR3MYFpb/exec"; // 앱스크립트 URL
+const sheetURL = "https://script.google.com/macros/s/AKfycbw1b5ucdbPwLSW6JKz8rH5rttNDqdOfF5lSxwUJb5Gz5kMEuVXY9cv4ueKnvR3MYFpb/exec"; // 실제 앱스크립트 URL
 
-function getColor(type){
-  if(type.includes("통증")||type.includes("약")||type.includes("화장실")) return "red";
-  if(type.includes("수액")||type.includes("침구")||type.includes("시트")) return "yellow";
-  return "";
+function getColor(row){
+  if(row.requestType==="통증/약" || row.requestType==="화장실" || row.etc==="기계에서 알람이 울리고 있어요") return "red";
+  if(row.requestType==="수액" || row.requestType==="침구/시트") return "yellow";
+  if(row.requestType==="물") return "white";
+  return "white";
 }
 
 function formatTime(str){
   if(!str) return "";
   const d = new Date(str);
-  return d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const k = new Date(d.getTime() + 9*60*60*1000);
+  return k.toISOString().substring(11,19);
 }
 
 async function markConfirm(btn,row){
-  const now = new Date();
+  const nowText = formatTime(new Date());
   const tr = btn.closest("tr");
-  tr.querySelector(".confirmTime").innerText = formatTime(now);
+  tr.querySelector(".confirmTime").innerText = nowText;
   btn.innerText = "확인됨";
   btn.disabled = true;
 
@@ -61,32 +64,31 @@ async function markConfirm(btn,row){
 }
 
 async function markDone(btn,row){
-  const now = new Date();
   const tr = btn.closest("tr");
-  
-  // 완료 상태 업데이트
-  tr.querySelector(".doneTime").innerText = formatTime(now);
+  tr.className = "green"; // 초록으로 변경
+  tr.querySelector(".doneTime").innerText = formatTime(new Date());
+  btn.innerText = "완료됨";
+  btn.disabled = true;
+
   await fetch(sheetURL,{
     method:"POST",
     body:JSON.stringify({action:"complete", row:row})
   });
 
-  // 초록색 적용 후 3초 뒤 사라짐
-  tr.classList.add("green");
-  btn.innerText = "완료됨";
-  btn.disabled = true;
-  setTimeout(()=>{ tr.remove(); },3000);
+  setTimeout(()=>{ tr.remove(); }, 3000); // 3초 후 제거
 }
+
+let displayedRows = new Set(); // 이미 표시된 요청 저장
 
 function renderTable(data){
   const tbody = document.querySelector("#requestTable tbody");
 
   data.forEach(row=>{
-    // 상태 빈칸이면 표시, 완료(ㅇ)는 화면에서 사라짐 처리
-    if(row.status === "ㅇ") return;
+    if(displayedRows.has(row.row)) return; // 이미 표시된 요청이면 스킵
+    displayedRows.add(row.row);
 
     const tr = document.createElement("tr");
-    tr.classList.add(getColor(row.requestType));
+    tr.className = getColor(row);
 
     tr.innerHTML = `
       <td>${row.patientId}</td>
@@ -97,18 +99,20 @@ function renderTable(data){
       <td>${formatTime(row.time)}</td>
       <td class="confirmTime">${formatTime(row.confirmTime)}</td>
       <td class="doneTime">${formatTime(row.completeTime)}</td>
+
       <td>
-        <button onclick="markConfirm(this,${row.row})" ${row.confirmTime ? "disabled" : ""}>
-          ${row.confirmTime ? "확인됨" : "확인"}
+        <button onclick="markConfirm(this,${row.row})" ${row.confirmTime?"disabled":""}>
+          ${row.confirmTime?"확인됨":"확인"}
         </button>
       </td>
+
       <td>
-        <button onclick="markDone(this,${row.row})" ${row.completeTime ? "disabled" : ""}>
-          ${row.completeTime ? "완료됨" : "완료"}
+        <button onclick="markDone(this,${row.row})" ${row.completeTime?"disabled":""}>
+          ${row.completeTime?"완료됨":"완료"}
         </button>
       </td>
     `;
-    tbody.prepend(tr); // 새 요청은 위로
+    tbody.appendChild(tr);
   });
 }
 
@@ -118,10 +122,8 @@ async function loadRequests(){
   renderTable(data);
 }
 
-// 2초마다 자동 갱신
 setInterval(loadRequests,2000);
 loadRequests();
 </script>
 </body>
 </html>
-
